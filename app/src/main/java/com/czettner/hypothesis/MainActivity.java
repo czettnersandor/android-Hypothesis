@@ -30,16 +30,16 @@ public class MainActivity extends AppCompatActivity
 
         ArrayList<News> news = new ArrayList<>();
 
-        // Prepare the loader.  Either re-connect with an existing one,
-        // or start a new one.
-        getSupportLoaderManager().initLoader(URL_LOADER, null, this);
-
         news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", new Date(System.currentTimeMillis())));
         news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", new Date(System.currentTimeMillis())));
 
         NewsAdapter newsAdatper = new NewsAdapter(this, news);
         ListView listView = (ListView) findViewById(R.id.list_view);
         listView.setAdapter(newsAdatper);
+
+        // Prepare the loader.  Either re-connect with an existing one,
+        // or start a new one.
+        getSupportLoaderManager().initLoader(URL_LOADER, null, this).forceLoad();
     }
 
     @Override
@@ -47,6 +47,7 @@ public class MainActivity extends AppCompatActivity
         switch (id) {
             case URL_LOADER:
                 // Returns a new AsyncTaskLoader
+                Log.d(LOG_TAG, "onCreateLoader");
                 return new RssListLoader(this);
             default:
                 // An invalid id was passed in
@@ -62,7 +63,7 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onLoaderReset(Loader<ArrayList<News>> loader) {
-
+        Log.d(LOG_TAG, "onLoaderReset");
     }
 
     /**
