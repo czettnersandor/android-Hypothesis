@@ -9,6 +9,22 @@ public class News {
     private String author;
     private Date publishedDate;
 
+    /**
+     * Constructor with all data
+     * @param title
+     * @param description
+     * @param category
+     * @param author
+     * @param publishedDate
+     */
+    public News(String title, String description, String category, String author, Date publishedDate) {
+        this.title = title;
+        this.description = description;
+        this.category = category;
+        this.author = author;
+        this.publishedDate = publishedDate;
+    }
+
     // BEGIN Getters and setters
     public String getTitle() {
         return title;

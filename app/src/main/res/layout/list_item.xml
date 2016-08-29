@@ -37,7 +37,7 @@
         tools:text="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut nec aliquam nisi. Cras vitae urna odio. Nullam aliquam, velit sit amet dictum molestie, dui felis molestie massa, vitae efficitur ipsum quam ut magna. Quisque vulputate congue dictum."
         />
     <TextView
-        android:textColor="#dddddd"
+        android:textColor="@color/light_list"
         android:id="@+id/published_date"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
