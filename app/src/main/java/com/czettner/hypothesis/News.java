@@ -7,6 +7,7 @@ public class News {
     private String description;
     private String category;
     private String author;
+    private String link;
     private Date publishedDate;
 
     /**
@@ -17,12 +18,20 @@ public class News {
      * @param author
      * @param publishedDate
      */
-    public News(String title, String description, String category, String author, Date publishedDate) {
+    public News(String title, String description, String category, String author, String link, Date publishedDate) {
         this.title = title;
         this.description = description;
         this.category = category;
         this.author = author;
+        this.link = link;
         this.publishedDate = publishedDate;
+    }
+
+    /**
+     * Constructor without data (use the setter methods to populate)
+     */
+    public News() {
+
     }
 
     // BEGIN Getters and setters
@@ -56,6 +65,14 @@ public class News {
 
     public void setAuthor(String author) {
         this.author = author;
+    }
+
+    public String getLink() {
+        return link;
+    }
+
+    public void setPublishedDate(String link) {
+        this.link = link;
     }
 
     public Date getPublishedDate() {

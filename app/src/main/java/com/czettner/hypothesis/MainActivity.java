@@ -30,8 +30,8 @@ public class MainActivity extends AppCompatActivity
 
         ArrayList<News> news = new ArrayList<>();
 
-        news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", new Date(System.currentTimeMillis())));
-        news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", new Date(System.currentTimeMillis())));
+        news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", "https://www.czettner.com/", new Date(System.currentTimeMillis())));
+        news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", "https://www.czettner.com/", new Date(System.currentTimeMillis())));
 
         NewsAdapter newsAdatper = new NewsAdapter(this, news);
         ListView listView = (ListView) findViewById(R.id.list_view);

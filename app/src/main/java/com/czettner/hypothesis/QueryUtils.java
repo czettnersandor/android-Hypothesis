@@ -1,22 +1,36 @@
 package com.czettner.hypothesis;
 
-import java.io.BufferedReader;
+import android.text.format.Time;
+import android.util.Xml;
+
+import org.xmlpull.v1.XmlPullParser;
+import org.xmlpull.v1.XmlPullParserException;
+
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Date;
+
 
 public class QueryUtils {
+
+    private static final int TAG_TITLE = 1;
+    private static final int TAG_PUBLISHED = 2;
+    private static final int TAG_DESCRIPTION = 3;
+    private static final int TAG_CATEGORY = 4;
+    private static final int TAG_AUTHOR = 5;
+    private static final int TAG_LINK = 6;
+    // We don't use XML namespaces
+    private static final String ns = null;
 
     public static ArrayList<News> queryNews(String urlFormat, int pagination) {
         ArrayList<News> news = new ArrayList<>();
 
         try {
-            String response = makeHttpRequest(createUrl(urlFormat));
+            ArrayList<News> response = makeHttpRequest(createUrl(urlFormat));
         } catch (IOException e) {
             // TODO
         }
@@ -29,8 +43,8 @@ public class QueryUtils {
      * @return String as a response
      * @throws IOException
      */
-    private static String makeHttpRequest(URL url) throws IOException {
-        String response = "";
+    private static ArrayList<News> makeHttpRequest(URL url) throws IOException {
+        ArrayList<News> response;
         HttpURLConnection urlConnection = null;
         InputStream inputStream = null;
         try {
@@ -40,9 +54,10 @@ public class QueryUtils {
             urlConnection.setConnectTimeout(15000 /* milliseconds */);
             urlConnection.connect();
             inputStream = urlConnection.getInputStream();
-            response = readFromStream(inputStream);
+            response = rssInputStreamParse(inputStream);
         } catch (IOException e) {
             // TODO: Handle the exception
+            response = null;
         } finally {
             if (urlConnection != null) {
                 urlConnection.disconnect();
@@ -52,24 +67,6 @@ public class QueryUtils {
             }
         }
         return response;
-    }
-
-    /**
-     * Convert the {@link InputStream} into a String which contains the
-     * whole response from the server.
-     */
-    private static String readFromStream(InputStream inputStream) throws IOException {
-        StringBuilder output = new StringBuilder();
-        if (inputStream != null) {
-            InputStreamReader inputStreamReader = new InputStreamReader(inputStream, Charset.forName("UTF-8"));
-            BufferedReader reader = new BufferedReader(inputStreamReader);
-            String line = reader.readLine();
-            while (line != null) {
-                output.append(line);
-                line = reader.readLine();
-            }
-        }
-        return output.toString();
     }
 
     /**
@@ -85,5 +82,199 @@ public class QueryUtils {
             return null;
         }
         return url;
+    }
+
+    private static ArrayList<News> rssInputStreamParse(InputStream is)
+            throws IOException {
+        ArrayList<News> news = new ArrayList<>();
+
+        try {
+            XmlPullParser parser = Xml.newPullParser();
+            parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
+            parser.setInput(is, null);
+            parser.nextTag();
+            return readFeed(parser);
+        } catch (XmlPullParserException e) {
+            // TODO
+            return null;
+        } catch (IOException e) {
+            // TODO
+            return null;
+        } finally {
+            is.close();
+        }
+
+    }
+
+    /**
+     * Decode a feed attached to an XmlPullParser.
+     *
+     * @param parser Incoming XMl
+     * @return ArrayList of News
+     * @throws org.xmlpull.v1.XmlPullParserException on error parsing feed.
+     * @throws java.io.IOException on I/O error.
+     */
+    private static ArrayList<News> readFeed(XmlPullParser parser)
+            throws XmlPullParserException, IOException {
+        ArrayList<News> entries = new ArrayList<News>();
+
+        // Search for <feed> tags. These wrap the beginning/end of an Atom document.
+        parser.require(XmlPullParser.START_TAG, ns, "feed");
+        while (parser.next() != XmlPullParser.END_TAG) {
+            if (parser.getEventType() != XmlPullParser.START_TAG) {
+                continue;
+            }
+            String name = parser.getName();
+            // Starts by looking for the <entry> tag. This tag repeats inside of <feed> for each
+            // article in the feed.
+            if (name.equals("entry")) {
+                entries.add(readEntry(parser));
+            } else {
+                skip(parser);
+            }
+        }
+        return entries;
+    }
+
+    /**
+     * Parses the contents of an entry. If it encounters a title, summary, or link tag, hands them
+     * off to their respective "read" methods for processing. Otherwise, skips the tag.
+     */
+    private static News readEntry(XmlPullParser parser)
+            throws XmlPullParserException, IOException {
+        parser.require(XmlPullParser.START_TAG, ns, "entry");
+        String title = null;
+        String description = null;
+        String category = null;
+        String author = null;
+        String link = null;
+        Date publishedOn = null;
+
+        while (parser.next() != XmlPullParser.END_TAG) {
+            if (parser.getEventType() != XmlPullParser.START_TAG) {
+                continue;
+            }
+            String name = parser.getName();
+            if (name.equals("title")){
+                title = readTag(parser, TAG_TITLE);
+            } else if (name.equals("description")) {
+                description = readTag(parser, TAG_DESCRIPTION);
+            } else if (name.equals("category")) {
+                category = readTag(parser, TAG_CATEGORY);
+            } else if (name.equals("dc:creator")) {
+                author = readTag(parser, TAG_AUTHOR);
+            } else if (name.equals("link")) {
+                String tempLink = readTag(parser, TAG_LINK);
+                if (tempLink != null) {
+                    link = tempLink;
+                }
+            } else if (name.equals("published")) {
+                // Example: <published>2003-06-27T12:00:00Z</published>
+                Time t = new Time();
+                t.parse3339(readTag(parser, TAG_PUBLISHED));
+                publishedOn = new Date(t.toMillis(false));
+            } else {
+                skip(parser);
+            }
+        }
+        return new News(title, description, category, author, link, publishedOn);
+    }
+
+    /**
+     * Process an incoming tag and read the selected value from it.
+     */
+    private static String readTag(XmlPullParser parser, int tagType)
+            throws IOException, XmlPullParserException {
+        String tag = null;
+        String endTag = null;
+
+        switch (tagType) {
+            case TAG_TITLE:
+                return readBasicTag(parser, "title");
+            case TAG_PUBLISHED:
+                return readBasicTag(parser, "pubDate");
+            case TAG_DESCRIPTION:
+                return readBasicTag(parser, "description");
+            case TAG_CATEGORY:
+                return readBasicTag(parser, "category");
+            case TAG_AUTHOR:
+                return readBasicTag(parser, "dc:creator");
+            case TAG_LINK:
+                return readAlternateLink(parser);
+            default:
+                throw new IllegalArgumentException("Unknown tag type: " + tagType);
+        }
+    }
+
+    /**
+     * Reads the body of a basic XML tag, which is guaranteed not to contain any nested elements.
+     *
+     * <p>You probably want to call readTag().
+     *
+     * @param parser Current parser object
+     * @param tag XML element tag name to parse
+     * @return Body of the specified tag
+     * @throws java.io.IOException
+     * @throws org.xmlpull.v1.XmlPullParserException
+     */
+    private static String readBasicTag(XmlPullParser parser, String tag)
+            throws IOException, XmlPullParserException {
+        parser.require(XmlPullParser.START_TAG, ns, tag);
+        String result = readText(parser);
+        parser.require(XmlPullParser.END_TAG, ns, tag);
+        return result;
+    }
+
+    /**
+     * Processes link tags in the feed.
+     */
+    private static String readAlternateLink(XmlPullParser parser)
+            throws IOException, XmlPullParserException {
+        String link = null;
+        parser.require(XmlPullParser.START_TAG, ns, "link");
+        String tag = parser.getName();
+        String relType = parser.getAttributeValue(null, "rel");
+        if (relType.equals("alternate")) {
+            link = parser.getAttributeValue(null, "href");
+        }
+        while (true) {
+            if (parser.nextTag() == XmlPullParser.END_TAG) break;
+            // Intentionally break; consumes any remaining sub-tags.
+        }
+        return link;
+    }
+
+    /**
+     * For the tags title and summary, extracts their text values.
+     */
+    private static String readText(XmlPullParser parser) throws IOException, XmlPullParserException {
+        String result = null;
+        if (parser.next() == XmlPullParser.TEXT) {
+            result = parser.getText();
+            parser.nextTag();
+        }
+        return result;
+    }
+
+    /**
+     * Skips tags the parser isn't interested in. Uses depth to handle nested tags. i.e.,
+     * if the next tag after a START_TAG isn't a matching END_TAG, it keeps going until it
+     * finds the matching END_TAG (as indicated by the value of "depth" being 0).
+     */
+    private static void skip(XmlPullParser parser) throws XmlPullParserException, IOException {
+        if (parser.getEventType() != XmlPullParser.START_TAG) {
+            throw new IllegalStateException();
+        }
+        int depth = 1;
+        while (depth != 0) {
+            switch (parser.next()) {
+                case XmlPullParser.END_TAG:
+                    depth--;
+                    break;
+                case XmlPullParser.START_TAG:
+                    depth++;
+                    break;
+            }
+        }
     }
 }
