@@ -1,6 +1,8 @@
 package com.czettner.hypothesis;
 
+import android.text.format.DateFormat;
 import android.text.format.Time;
+import android.util.Log;
 import android.util.Xml;
 
 import org.xmlpull.v1.XmlPullParser;
@@ -11,6 +13,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 
@@ -25,13 +28,14 @@ public class QueryUtils {
     private static final int TAG_LINK = 6;
     // We don't use XML namespaces
     private static final String ns = null;
+    private static final String LOG_TAG = "QueryUtils";
 
     public static ArrayList<News> queryNews(String urlFormat, int pagination) {
-        ArrayList<News> news = new ArrayList<>();
-
         try {
             ArrayList<News> response = makeHttpRequest(createUrl(urlFormat));
+            return response;
         } catch (IOException e) {
+            Log.d(LOG_TAG, e.getMessage());
             // TODO
         }
         return null;
@@ -57,6 +61,7 @@ public class QueryUtils {
             response = rssInputStreamParse(inputStream);
         } catch (IOException e) {
             // TODO: Handle the exception
+            Log.d(LOG_TAG, e.getMessage());
             response = null;
         } finally {
             if (urlConnection != null) {
@@ -78,7 +83,8 @@ public class QueryUtils {
         URL url = null;
         try {
             url = new URL(stringUrl);
-        } catch (MalformedURLException exception) {
+        } catch (MalformedURLException e) {
+            Log.d(LOG_TAG, e.getMessage());
             return null;
         }
         return url;
@@ -86,24 +92,21 @@ public class QueryUtils {
 
     private static ArrayList<News> rssInputStreamParse(InputStream is)
             throws IOException {
-        ArrayList<News> news = new ArrayList<>();
-
         try {
             XmlPullParser parser = Xml.newPullParser();
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
             parser.setInput(is, null);
             parser.nextTag();
+            int eventType = parser.getEventType();
             return readFeed(parser);
         } catch (XmlPullParserException e) {
             // TODO
-            return null;
-        } catch (IOException e) {
-            // TODO
+            e.printStackTrace();
+            Log.d(LOG_TAG, e.getMessage());
             return null;
         } finally {
             is.close();
         }
-
     }
 
     /**
@@ -119,18 +122,24 @@ public class QueryUtils {
         ArrayList<News> entries = new ArrayList<News>();
 
         // Search for <feed> tags. These wrap the beginning/end of an Atom document.
-        parser.require(XmlPullParser.START_TAG, ns, "feed");
+        parser.require(XmlPullParser.START_TAG, ns, "rss");
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.getEventType() != XmlPullParser.START_TAG) {
                 continue;
             }
-            String name = parser.getName();
-            // Starts by looking for the <entry> tag. This tag repeats inside of <feed> for each
-            // article in the feed.
-            if (name.equals("entry")) {
-                entries.add(readEntry(parser));
-            } else {
-                skip(parser);
+            // Starts by looking for the <channel> tag. This tag is inside of <rss>
+            // For each article, there's an <item> in the feed.
+            parser.require(XmlPullParser.START_TAG, ns, "channel");
+            while (parser.next() != XmlPullParser.END_TAG) {
+                if (parser.getEventType() != XmlPullParser.START_TAG) {
+                    continue;
+                }
+                String itemName = parser.getName();
+                if (itemName.equals("item")) {
+                    entries.add(readEntry(parser));
+                } else {
+                    skip(parser);
+                }
             }
         }
         return entries;
@@ -142,13 +151,14 @@ public class QueryUtils {
      */
     private static News readEntry(XmlPullParser parser)
             throws XmlPullParserException, IOException {
-        parser.require(XmlPullParser.START_TAG, ns, "entry");
+        parser.require(XmlPullParser.START_TAG, ns, "item");
         String title = null;
         String description = null;
         String category = null;
         String author = null;
         String link = null;
         Date publishedOn = null;
+        SimpleDateFormat formatter = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss z");
 
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.getEventType() != XmlPullParser.START_TAG) {
@@ -168,11 +178,13 @@ public class QueryUtils {
                 if (tempLink != null) {
                     link = tempLink;
                 }
-            } else if (name.equals("published")) {
-                // Example: <published>2003-06-27T12:00:00Z</published>
-                Time t = new Time();
-                t.parse3339(readTag(parser, TAG_PUBLISHED));
-                publishedOn = new Date(t.toMillis(false));
+            } else if (name.equals("pubDate")) {
+                try {
+                    publishedOn = formatter.parse(readTag(parser, TAG_PUBLISHED));
+                } catch (java.text.ParseException e) {
+                    publishedOn = null;
+                }
+
             } else {
                 skip(parser);
             }
@@ -185,8 +197,6 @@ public class QueryUtils {
      */
     private static String readTag(XmlPullParser parser, int tagType)
             throws IOException, XmlPullParserException {
-        String tag = null;
-        String endTag = null;
 
         switch (tagType) {
             case TAG_TITLE:
@@ -200,7 +210,7 @@ public class QueryUtils {
             case TAG_AUTHOR:
                 return readBasicTag(parser, "dc:creator");
             case TAG_LINK:
-                return readAlternateLink(parser);
+                return readBasicTag(parser, "link");
             default:
                 throw new IllegalArgumentException("Unknown tag type: " + tagType);
         }
@@ -223,25 +233,6 @@ public class QueryUtils {
         String result = readText(parser);
         parser.require(XmlPullParser.END_TAG, ns, tag);
         return result;
-    }
-
-    /**
-     * Processes link tags in the feed.
-     */
-    private static String readAlternateLink(XmlPullParser parser)
-            throws IOException, XmlPullParserException {
-        String link = null;
-        parser.require(XmlPullParser.START_TAG, ns, "link");
-        String tag = parser.getName();
-        String relType = parser.getAttributeValue(null, "rel");
-        if (relType.equals("alternate")) {
-            link = parser.getAttributeValue(null, "href");
-        }
-        while (true) {
-            if (parser.nextTag() == XmlPullParser.END_TAG) break;
-            // Intentionally break; consumes any remaining sub-tags.
-        }
-        return link;
     }
 
     /**

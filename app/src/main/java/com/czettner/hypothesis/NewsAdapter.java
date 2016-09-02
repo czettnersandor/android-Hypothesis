@@ -44,7 +44,11 @@ public class NewsAdapter extends ArrayAdapter<News> {
         tvAuthor.setText(news.getAuthor());
 
         SimpleDateFormat formatter = new SimpleDateFormat(DATE_FORMAT);
-        tvPublishedDate.setText(formatter.format(news.getPublishedDate()));
+        if (news.getPublishedDate() != null) {
+            tvPublishedDate.setText(formatter.format(news.getPublishedDate()));
+        } else {
+            tvPublishedDate.setText(R.string.no_date);
+        }
 
         return convertView;
     }

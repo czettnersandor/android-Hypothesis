@@ -1,7 +1,8 @@
 package com.czettner.hypothesis;
 
-import android.app.DownloadManager;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.AsyncTaskLoader;
 import android.support.v4.content.Loader;
@@ -9,33 +10,48 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
 
 public class MainActivity extends AppCompatActivity
     implements LoaderManager.LoaderCallbacks<ArrayList<News>> {
 
-    private static final String RSS_URL = "http://thealternativehypothesis.org/index.php/feed/?paged=2";
+    // With pagination: http://thealternativehypothesis.org/index.php/feed/?paged=2
+    private static final String RSS_URL = "http://thealternativehypothesis.org/index.php/feed/";
     private static final int URL_LOADER = 0;
     private static final String LOG_TAG = "MainActivity.LOG_TAG";
+
+    private NewsAdapter newsAdatper;
+    private ListView listView;
+    private ArrayList<News> news;
+    private TextView nodataText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        ArrayList<News> news = new ArrayList<>();
+        news = new ArrayList<>();
 
-        news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", "https://www.czettner.com/", new Date(System.currentTimeMillis())));
-        news.add(new News("Title", "Lorem ipsum, dolor sit amet", "Category", "Author Joe", "https://www.czettner.com/", new Date(System.currentTimeMillis())));
-
-        NewsAdapter newsAdatper = new NewsAdapter(this, news);
-        ListView listView = (ListView) findViewById(R.id.list_view);
+        newsAdatper = new NewsAdapter(this, news);
+        listView = (ListView) findViewById(R.id.list_view);
+        nodataText = (TextView) findViewById(R.id.no_data);
+        nodataText.setVisibility(View.GONE);
         listView.setAdapter(newsAdatper);
+
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                String url = news.get(position).getLink();
+                Intent i = new Intent(Intent.ACTION_VIEW);
+                i.setData(Uri.parse(url));
+                startActivity(i);
+            }
+        });
 
         // Prepare the loader.  Either re-connect with an existing one,
         // or start a new one.
@@ -59,6 +75,20 @@ public class MainActivity extends AppCompatActivity
     public void onLoadFinished(Loader<ArrayList<News>> loader, ArrayList<News> data) {
         ProgressBar progressbar = (ProgressBar) findViewById(R.id.progressbar);
         progressbar.setVisibility(View.GONE);
+        news.clear();
+        if (data != null) {
+            news.addAll(data);
+        }
+        runOnUiThread(new Runnable() {
+            public void run() {
+                newsAdatper.notifyDataSetChanged();
+            }
+        });
+        if (news.size() == 0) {
+            nodataText.setVisibility(View.VISIBLE);
+        } else {
+            nodataText.setVisibility(View.GONE);
+        }
     }
 
     @Override

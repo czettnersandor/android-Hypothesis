@@ -27,60 +27,30 @@ public class News {
         this.publishedDate = publishedDate;
     }
 
-    /**
-     * Constructor without data (use the setter methods to populate)
-     */
-    public News() {
-
-    }
-
     // BEGIN Getters and setters
     public String getTitle() {
         return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
     }
 
     public String getDescription() {
         return description;
     }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
     public String getCategory() {
         return category;
-    }
-
-    public void setCategory(String category) {
-        this.category = category;
     }
 
     public String getAuthor() {
         return author;
     }
 
-    public void setAuthor(String author) {
-        this.author = author;
-    }
-
     public String getLink() {
         return link;
-    }
-
-    public void setPublishedDate(String link) {
-        this.link = link;
     }
 
     public Date getPublishedDate() {
         return publishedDate;
     }
 
-    public void setPublishedDate(Date publishedDate) {
-        this.publishedDate = publishedDate;
-    }
     // END Getters and setters
 }
