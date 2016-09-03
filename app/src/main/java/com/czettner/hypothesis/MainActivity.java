@@ -26,28 +26,28 @@ public class MainActivity extends AppCompatActivity
     private static final int URL_LOADER = 0;
     private static final String LOG_TAG = "MainActivity.LOG_TAG";
 
-    private NewsAdapter newsAdatper;
-    private ListView listView;
-    private ArrayList<News> news;
-    private TextView nodataText;
+    private NewsAdapter mNewsAdatper;
+    private ListView mListView;
+    private ArrayList<News> mNews;
+    private TextView mNodataText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        news = new ArrayList<>();
+        mNews = new ArrayList<>();
 
-        newsAdatper = new NewsAdapter(this, news);
-        listView = (ListView) findViewById(R.id.list_view);
-        nodataText = (TextView) findViewById(R.id.no_data);
-        nodataText.setVisibility(View.GONE);
-        listView.setAdapter(newsAdatper);
+        mNewsAdatper = new NewsAdapter(this, mNews);
+        mListView = (ListView) findViewById(R.id.list_view);
+        mNodataText = (TextView) findViewById(R.id.no_data);
+        mNodataText.setVisibility(View.GONE);
+        mListView.setAdapter(mNewsAdatper);
 
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+        mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                String url = news.get(position).getLink();
+                String url = mNews.get(position).getLink();
                 Intent i = new Intent(Intent.ACTION_VIEW);
                 i.setData(Uri.parse(url));
                 startActivity(i);
@@ -59,9 +59,11 @@ public class MainActivity extends AppCompatActivity
             // or start a new one.
             getSupportLoaderManager().initLoader(URL_LOADER, null, this).forceLoad();
         } else {
-            nodataText.setText(R.string.device_not_connected);
+            mNodataText.setText(R.string.device_not_connected);
         }
     }
+
+
 
     /**
      * This method checks whether mobile is connected to internet and returns true if connected
@@ -91,20 +93,20 @@ public class MainActivity extends AppCompatActivity
     public void onLoadFinished(Loader<ArrayList<News>> loader, ArrayList<News> data) {
         ProgressBar progressbar = (ProgressBar) findViewById(R.id.progressbar);
         progressbar.setVisibility(View.GONE);
-        news.clear();
+        mNews.clear();
         if (data != null) {
-            news.addAll(data);
+            mNews.addAll(data);
         }
         runOnUiThread(new Runnable() {
             public void run() {
-                newsAdatper.notifyDataSetChanged();
+                mNewsAdatper.notifyDataSetChanged();
             }
         });
-        if (news.size() == 0) {
-            nodataText.setText(R.string.no_data_available);
-            nodataText.setVisibility(View.VISIBLE);
+        if (mNews.size() == 0) {
+            mNodataText.setText(R.string.no_data_available);
+            mNodataText.setVisibility(View.VISIBLE);
         } else {
-            nodataText.setVisibility(View.GONE);
+            mNodataText.setVisibility(View.GONE);
         }
     }
 

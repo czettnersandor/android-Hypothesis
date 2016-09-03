@@ -1,7 +1,6 @@
 package com.czettner.hypothesis;
 
-import android.text.format.DateFormat;
-import android.text.format.Time;
+import android.text.Html;
 import android.util.Log;
 import android.util.Xml;
 
@@ -60,7 +59,7 @@ public class QueryUtils {
             inputStream = urlConnection.getInputStream();
             response = rssInputStreamParse(inputStream);
         } catch (IOException e) {
-            // TODO: Handle the exception
+            // TODO: Handle the exception better
             Log.d(LOG_TAG, e.getMessage());
             response = null;
         } finally {
@@ -121,7 +120,7 @@ public class QueryUtils {
             throws XmlPullParserException, IOException {
         ArrayList<News> entries = new ArrayList<News>();
 
-        // Search for <feed> tags. These wrap the beginning/end of an Atom document.
+        // Search for <rss> tag. These wrap the beginning/end of an RSS feed.
         parser.require(XmlPullParser.START_TAG, ns, "rss");
         while (parser.next() != XmlPullParser.END_TAG) {
             if (parser.getEventType() != XmlPullParser.START_TAG) {
@@ -232,6 +231,8 @@ public class QueryUtils {
         parser.require(XmlPullParser.START_TAG, ns, tag);
         String result = readText(parser);
         parser.require(XmlPullParser.END_TAG, ns, tag);
+        // Convert html encoded characters
+        result = Html.fromHtml(result).toString();
         return result;
     }
 
