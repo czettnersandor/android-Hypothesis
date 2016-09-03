@@ -4,33 +4,44 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.Uri;
+import android.os.Handler;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.AsyncTaskLoader;
 import android.support.v4.content.Loader;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity
-    implements LoaderManager.LoaderCallbacks<ArrayList<News>> {
+        implements LoaderManager.LoaderCallbacks<ArrayList<News>> {
 
     // With pagination: http://thealternativehypothesis.org/index.php/feed/?paged=2
     private static final String RSS_URL = "http://thealternativehypothesis.org/index.php/feed/";
     private static final int URL_LOADER = 0;
     private static final String LOG_TAG = "MainActivity.LOG_TAG";
+    private static final int HANDLER_DELAY = 30000;
 
     private NewsAdapter mNewsAdatper;
     private ListView mListView;
     private ArrayList<News> mNews;
     private TextView mNodataText;
+    private SwipeRefreshLayout mSwipeLayout;
+    private Handler mHandler = new Handler();
 
+    /**
+     * onCreate method, this will run every time the Activity is created, device rotated, etc.
+     * @param savedInstanceState
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -43,6 +54,21 @@ public class MainActivity extends AppCompatActivity
         mNodataText = (TextView) findViewById(R.id.no_data);
         mNodataText.setVisibility(View.GONE);
         mListView.setAdapter(mNewsAdatper);
+        mSwipeLayout = (SwipeRefreshLayout) findViewById(R.id.swiperefresh);
+
+        mSwipeLayout.setOnRefreshListener(
+                new SwipeRefreshLayout.OnRefreshListener() {
+                    @Override
+                    public void onRefresh() {
+                        Log.i(LOG_TAG, "onRefresh called from SwipeRefreshLayout");
+
+                        // This method performs the actual data-refresh operation.
+                        // The method calls setRefreshing(false) when it's finished.
+                        refresh();
+                    }
+                }
+        );
+
 
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
@@ -54,16 +80,36 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
+        // Run the above code block on the main thread after 30 seconds
+        mHandler.post(runnableCode);
+    }
+
+    // Define the code block to be executed
+    private Runnable runnableCode = new Runnable() {
+        @Override
+        public void run() {
+            // Do something here on the main thread
+            Log.d("Handlers", "Called on main thread");
+            refresh();
+            mHandler.postDelayed(runnableCode, HANDLER_DELAY);
+        }
+    };
+
+    /**
+     * Refresh news list
+     */
+    private void refresh() {
         if (isNetworkConnected()) {
             // Prepare the loader.  Either re-connect with an existing one,
             // or start a new one.
+            mSwipeLayout.setRefreshing(true);
+            mHandler.removeCallbacks(runnableCode);
             getSupportLoaderManager().initLoader(URL_LOADER, null, this).forceLoad();
         } else {
             mNodataText.setText(R.string.device_not_connected);
+            mNodataText.setVisibility(View.VISIBLE);
         }
     }
-
-
 
     /**
      * This method checks whether mobile is connected to internet and returns true if connected
@@ -75,6 +121,18 @@ public class MainActivity extends AppCompatActivity
         return cm.getActiveNetworkInfo() != null;
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        refresh();
+        return super.onOptionsItemSelected(item);
+    }
 
     @Override
     public Loader<ArrayList<News>> onCreateLoader(int id, Bundle args) {
@@ -91,23 +149,20 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onLoadFinished(Loader<ArrayList<News>> loader, ArrayList<News> data) {
-        ProgressBar progressbar = (ProgressBar) findViewById(R.id.progressbar);
-        progressbar.setVisibility(View.GONE);
+        mSwipeLayout.setRefreshing(false);
         mNews.clear();
         if (data != null) {
             mNews.addAll(data);
         }
-        runOnUiThread(new Runnable() {
-            public void run() {
-                mNewsAdatper.notifyDataSetChanged();
-            }
-        });
+        mNewsAdatper.notifyDataSetChanged();
         if (mNews.size() == 0) {
             mNodataText.setText(R.string.no_data_available);
             mNodataText.setVisibility(View.VISIBLE);
         } else {
             mNodataText.setVisibility(View.GONE);
         }
+
+        mHandler.postDelayed(runnableCode, HANDLER_DELAY);
     }
 
     @Override
