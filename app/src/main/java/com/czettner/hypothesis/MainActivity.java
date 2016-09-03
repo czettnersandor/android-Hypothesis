@@ -100,10 +100,17 @@ public class MainActivity extends AppCompatActivity
      */
     private void refresh() {
         if (isNetworkConnected()) {
+            // This is required because of a bug. See: http://stackoverflow.com/questions/26858692/swiperefreshlayout-setrefreshing-not-showing-indicator-initially
+            mSwipeLayout.post(new Runnable() {
+                @Override
+                public void run() {
+                    mSwipeLayout.setRefreshing(true);
+                }
+            });
+
+            mHandler.removeCallbacks(runnableCode);
             // Prepare the loader.  Either re-connect with an existing one,
             // or start a new one.
-            mSwipeLayout.setRefreshing(true);
-            mHandler.removeCallbacks(runnableCode);
             getSupportLoaderManager().initLoader(URL_LOADER, null, this).forceLoad();
         } else {
             mNodataText.setText(R.string.device_not_connected);
