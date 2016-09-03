@@ -25,8 +25,7 @@ import java.util.ArrayList;
 public class MainActivity extends AppCompatActivity
         implements LoaderManager.LoaderCallbacks<ArrayList<News>> {
 
-    // With pagination: http://thealternativehypothesis.org/index.php/feed/?paged=2
-    private static final String RSS_URL = "http://thealternativehypothesis.org/index.php/feed/";
+    private static final String NEWS_URL = "http://content.guardianapis.com/search?q=debate&tag=politics/politics&show-fields=trailText&from-date=2014-01-01&api-key=test";
     private static final int URL_LOADER = 0;
     private static final String LOG_TAG = "MainActivity.LOG_TAG";
     private static final int HANDLER_DELAY = 30000;
@@ -188,7 +187,7 @@ public class MainActivity extends AppCompatActivity
         @Override
         public ArrayList<News> loadInBackground() {
             Log.d(LOG_TAG, "loadInBackground");
-            return QueryUtils.queryNews(RSS_URL, 0);
+            return QueryUtils.queryNews(NEWS_URL);
         }
     }
 }

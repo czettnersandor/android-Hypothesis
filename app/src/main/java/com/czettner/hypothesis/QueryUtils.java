@@ -1,67 +1,95 @@
 package com.czettner.hypothesis;
 
-import android.text.Html;
+
+import android.text.TextUtils;
 import android.util.Log;
-import android.util.Xml;
 
-import org.xmlpull.v1.XmlPullParser;
-import org.xmlpull.v1.XmlPullParserException;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 
 
 public class QueryUtils {
+    /** Tag for the log messages */
+    public static final String LOG_TAG = QueryUtils.class.getSimpleName();
 
-    private static final int TAG_TITLE = 1;
-    private static final int TAG_PUBLISHED = 2;
-    private static final int TAG_DESCRIPTION = 3;
-    private static final int TAG_CATEGORY = 4;
-    private static final int TAG_AUTHOR = 5;
-    private static final int TAG_LINK = 6;
-    // We don't use XML namespaces
-    private static final String ns = null;
-    private static final String LOG_TAG = "QueryUtils";
+    /**
+     * Query the USGS dataset and return an {@link Event} object to represent a single earthquake.
+     */
+    public static ArrayList<News> queryNews(String requestUrl) {
+        // Create URL object
+        URL url = createUrl(requestUrl);
 
-    public static ArrayList<News> queryNews(String urlFormat, int pagination) {
+        // Perform HTTP request to the URL and receive a JSON response back
+        String jsonResponse = null;
         try {
-            ArrayList<News> response = makeHttpRequest(createUrl(urlFormat));
-            return response;
+            jsonResponse = makeHttpRequest(url);
         } catch (IOException e) {
-            Log.d(LOG_TAG, e.getMessage());
-            // TODO
+            Log.e(LOG_TAG, "Error closing input stream", e);
         }
-        return null;
+
+        // Extract relevant fields from the JSON response and create an {@link Event} object
+        ArrayList<News> news = extractNewsFromJson(jsonResponse);
+
+        // Return the {@link Event}
+        return news;
+    }
+
+    /**
+     * Returns new URL object from the given string URL.
+     */
+    private static URL createUrl(String stringUrl) {
+        URL url = null;
+        try {
+            url = new URL(stringUrl);
+        } catch (MalformedURLException e) {
+            Log.e(LOG_TAG, "Error with creating URL ", e);
+        }
+        return url;
     }
 
     /**
      * Make an HTTP request to the given URL and return a String as the response.
-     * @param url URL
-     * @return String as a response
-     * @throws IOException
      */
-    private static ArrayList<News> makeHttpRequest(URL url) throws IOException {
-        ArrayList<News> response;
+    private static String makeHttpRequest(URL url) throws IOException {
+        String jsonResponse = "";
+
+        // If the URL is null, then return early.
+        if (url == null) {
+            return jsonResponse;
+        }
+
         HttpURLConnection urlConnection = null;
         InputStream inputStream = null;
         try {
             urlConnection = (HttpURLConnection) url.openConnection();
-            urlConnection.setRequestMethod("GET");
             urlConnection.setReadTimeout(10000 /* milliseconds */);
             urlConnection.setConnectTimeout(15000 /* milliseconds */);
+            urlConnection.setRequestMethod("GET");
             urlConnection.connect();
-            inputStream = urlConnection.getInputStream();
-            response = rssInputStreamParse(inputStream);
+
+            // If the request was successful (response code 200),
+            // then read the input stream and parse the response.
+            if (urlConnection.getResponseCode() == 200) {
+                inputStream = urlConnection.getInputStream();
+                jsonResponse = readFromStream(inputStream);
+            } else {
+                Log.e(LOG_TAG, "Error response code: " + urlConnection.getResponseCode());
+            }
         } catch (IOException e) {
-            // TODO: Handle the exception better
-            Log.d(LOG_TAG, e.getMessage());
-            response = null;
+            Log.e(LOG_TAG, "Problem retrieving the news JSON results.", e);
         } finally {
             if (urlConnection != null) {
                 urlConnection.disconnect();
@@ -70,203 +98,73 @@ public class QueryUtils {
                 inputStream.close();
             }
         }
-        return response;
+        return jsonResponse;
     }
 
     /**
-     * Returns new URL object from the given string URL.
-     * @param stringUrl Url ni String format
-     * @return URL object
+     * Convert the {@link InputStream} into a String which contains the
+     * whole JSON response from the server.
      */
-    private static URL createUrl(String stringUrl) {
-        URL url = null;
-        try {
-            url = new URL(stringUrl);
-        } catch (MalformedURLException e) {
-            Log.d(LOG_TAG, e.getMessage());
-            return null;
-        }
-        return url;
-    }
-
-    private static ArrayList<News> rssInputStreamParse(InputStream is)
-            throws IOException {
-        try {
-            XmlPullParser parser = Xml.newPullParser();
-            parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
-            parser.setInput(is, null);
-            parser.nextTag();
-            int eventType = parser.getEventType();
-            return readFeed(parser);
-        } catch (XmlPullParserException e) {
-            // TODO
-            e.printStackTrace();
-            Log.d(LOG_TAG, e.getMessage());
-            return null;
-        } finally {
-            is.close();
-        }
-    }
-
-    /**
-     * Decode a feed attached to an XmlPullParser.
-     *
-     * @param parser Incoming XMl
-     * @return ArrayList of News
-     * @throws org.xmlpull.v1.XmlPullParserException on error parsing feed.
-     * @throws java.io.IOException on I/O error.
-     */
-    private static ArrayList<News> readFeed(XmlPullParser parser)
-            throws XmlPullParserException, IOException {
-        ArrayList<News> entries = new ArrayList<News>();
-
-        // Search for <rss> tag. These wrap the beginning/end of an RSS feed.
-        parser.require(XmlPullParser.START_TAG, ns, "rss");
-        while (parser.next() != XmlPullParser.END_TAG) {
-            if (parser.getEventType() != XmlPullParser.START_TAG) {
-                continue;
-            }
-            // Starts by looking for the <channel> tag. This tag is inside of <rss>
-            // For each article, there's an <item> in the feed.
-            parser.require(XmlPullParser.START_TAG, ns, "channel");
-            while (parser.next() != XmlPullParser.END_TAG) {
-                if (parser.getEventType() != XmlPullParser.START_TAG) {
-                    continue;
-                }
-                String itemName = parser.getName();
-                if (itemName.equals("item")) {
-                    entries.add(readEntry(parser));
-                } else {
-                    skip(parser);
-                }
+    private static String readFromStream(InputStream inputStream) throws IOException {
+        StringBuilder output = new StringBuilder();
+        if (inputStream != null) {
+            InputStreamReader inputStreamReader = new InputStreamReader(inputStream, Charset.forName("UTF-8"));
+            BufferedReader reader = new BufferedReader(inputStreamReader);
+            String line = reader.readLine();
+            while (line != null) {
+                output.append(line);
+                line = reader.readLine();
             }
         }
-        return entries;
+        return output.toString();
     }
 
     /**
-     * Parses the contents of an entry. If it encounters a title, summary, or link tag, hands them
-     * off to their respective "read" methods for processing. Otherwise, skips the tag.
+     * Return a list of news
      */
-    private static News readEntry(XmlPullParser parser)
-            throws XmlPullParserException, IOException {
-        parser.require(XmlPullParser.START_TAG, ns, "item");
+    private static ArrayList<News> extractNewsFromJson(String newsJSON) {
+        // If the JSON string is empty or null, then return early.
+        if (TextUtils.isEmpty(newsJSON)) {
+            return null;
+        }
+
+        ArrayList<News> news = new ArrayList<>();
+
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-mm-dd'T'HH:mm:ss");
+
         String title = null;
         String description = null;
         String category = null;
         String author = null;
         String link = null;
         Date publishedOn = null;
-        SimpleDateFormat formatter = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss z");
 
-        while (parser.next() != XmlPullParser.END_TAG) {
-            if (parser.getEventType() != XmlPullParser.START_TAG) {
-                continue;
-            }
-            String name = parser.getName();
-            if (name.equals("title")){
-                title = readTag(parser, TAG_TITLE);
-            } else if (name.equals("description")) {
-                description = readTag(parser, TAG_DESCRIPTION);
-            } else if (name.equals("category")) {
-                category = readTag(parser, TAG_CATEGORY);
-            } else if (name.equals("dc:creator")) {
-                author = readTag(parser, TAG_AUTHOR);
-            } else if (name.equals("link")) {
-                String tempLink = readTag(parser, TAG_LINK);
-                if (tempLink != null) {
-                    link = tempLink;
-                }
-            } else if (name.equals("pubDate")) {
+        try {
+            JSONObject jsonRootObject = new JSONObject(newsJSON);
+            JSONObject response = jsonRootObject.getJSONObject("response");
+            JSONArray results = response.optJSONArray("results");
+
+            for (int i = 0; i < results.length(); i++) {
+                JSONObject jsonObject = results.getJSONObject(i);
+                JSONObject fields = jsonObject.getJSONObject("fields");
+
+                title = jsonObject.getString("webTitle").toString();
+                description = fields.getString("trailText").toString();
+                author = jsonObject.getString("type").toString();
+                category = jsonObject.getString("sectionName").toString();
+                link = jsonObject.getString("webUrl").toString();
                 try {
-                    publishedOn = formatter.parse(readTag(parser, TAG_PUBLISHED));
+                    publishedOn = formatter.parse(jsonObject.getString("webPublicationDate").toString());
                 } catch (java.text.ParseException e) {
                     publishedOn = null;
                 }
-
-            } else {
-                skip(parser);
+                news.add(new News(title, description, category, author, link, publishedOn));
             }
-        }
-        return new News(title, description, category, author, link, publishedOn);
-    }
 
-    /**
-     * Process an incoming tag and read the selected value from it.
-     */
-    private static String readTag(XmlPullParser parser, int tagType)
-            throws IOException, XmlPullParserException {
-
-        switch (tagType) {
-            case TAG_TITLE:
-                return readBasicTag(parser, "title");
-            case TAG_PUBLISHED:
-                return readBasicTag(parser, "pubDate");
-            case TAG_DESCRIPTION:
-                return readBasicTag(parser, "description");
-            case TAG_CATEGORY:
-                return readBasicTag(parser, "category");
-            case TAG_AUTHOR:
-                return readBasicTag(parser, "dc:creator");
-            case TAG_LINK:
-                return readBasicTag(parser, "link");
-            default:
-                throw new IllegalArgumentException("Unknown tag type: " + tagType);
-        }
-    }
-
-    /**
-     * Reads the body of a basic XML tag, which is guaranteed not to contain any nested elements.
-     *
-     * <p>You probably want to call readTag().
-     *
-     * @param parser Current parser object
-     * @param tag XML element tag name to parse
-     * @return Body of the specified tag
-     * @throws java.io.IOException
-     * @throws org.xmlpull.v1.XmlPullParserException
-     */
-    private static String readBasicTag(XmlPullParser parser, String tag)
-            throws IOException, XmlPullParserException {
-        parser.require(XmlPullParser.START_TAG, ns, tag);
-        String result = readText(parser);
-        parser.require(XmlPullParser.END_TAG, ns, tag);
-        // Convert html encoded characters
-        result = Html.fromHtml(result).toString();
-        return result;
-    }
-
-    /**
-     * For the tags title and summary, extracts their text values.
-     */
-    private static String readText(XmlPullParser parser) throws IOException, XmlPullParserException {
-        String result = null;
-        if (parser.next() == XmlPullParser.TEXT) {
-            result = parser.getText();
-            parser.nextTag();
-        }
-        return result;
-    }
-
-    /**
-     * Skips tags the parser isn't interested in. Uses depth to handle nested tags. i.e.,
-     * if the next tag after a START_TAG isn't a matching END_TAG, it keeps going until it
-     * finds the matching END_TAG (as indicated by the value of "depth" being 0).
-     */
-    private static void skip(XmlPullParser parser) throws XmlPullParserException, IOException {
-        if (parser.getEventType() != XmlPullParser.START_TAG) {
-            throw new IllegalStateException();
-        }
-        int depth = 1;
-        while (depth != 0) {
-            switch (parser.next()) {
-                case XmlPullParser.END_TAG:
-                    depth--;
-                    break;
-                case XmlPullParser.START_TAG:
-                    depth++;
-                    break;
-            }
+            return news;
+        } catch (JSONException e) {
+            Log.e(LOG_TAG, "Problem parsing the earthquake JSON results", e);
+            return null;
         }
     }
 }
