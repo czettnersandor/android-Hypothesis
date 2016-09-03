@@ -2,6 +2,7 @@ package com.czettner.hypothesis;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.AsyncTaskLoader;
@@ -53,10 +54,25 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
-        // Prepare the loader.  Either re-connect with an existing one,
-        // or start a new one.
-        getSupportLoaderManager().initLoader(URL_LOADER, null, this).forceLoad();
+        if (isNetworkConnected()) {
+            // Prepare the loader.  Either re-connect with an existing one,
+            // or start a new one.
+            getSupportLoaderManager().initLoader(URL_LOADER, null, this).forceLoad();
+        } else {
+            nodataText.setText(R.string.device_not_connected);
+        }
     }
+
+    /**
+     * This method checks whether mobile is connected to internet and returns true if connected
+     * @return true if connected
+     */
+    private boolean isNetworkConnected() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        return cm.getActiveNetworkInfo() != null;
+    }
+
 
     @Override
     public Loader<ArrayList<News>> onCreateLoader(int id, Bundle args) {
@@ -85,6 +101,7 @@ public class MainActivity extends AppCompatActivity
             }
         });
         if (news.size() == 0) {
+            nodataText.setText(R.string.no_data_available);
             nodataText.setVisibility(View.VISIBLE);
         } else {
             nodataText.setVisibility(View.GONE);
